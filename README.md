@@ -1,13 +1,14 @@
 # Google Photos Takeout Metadata Recovery
 
-Two Python utilities that restore metadata from a **Google Takeout** export:
+Three Python utilities that restore and fix media files from a **Google Takeout** export:
 
 | Script | What it does |
 |---|---|
 | `python/recover_metadata.py` | Reads the `.supplemental*.json` sidecar files, writes date/time, GPS and description into each media file via **exiftool**, then deletes each sidecar on success. |
 | `python/set_finder_dates.py` | Reads `DateTimeOriginal` from already-processed media files and sets the **macOS Finder creation date** via `SetFile`, so Finder and Spotlight show the original photo date. |
+| `python/fix_videos.py` | Renames `.MP` Motion Photo clips to `.mp4`, and re-encodes VP9 MP4 files to H.264 for macOS/QuickTime compatibility. |
 
-Run `python/recover_metadata.py` first, then `python/set_finder_dates.py`.
+Recommended order: `recover_metadata.py` → `fix_videos.py` → `set_finder_dates.py`.
 
 ---
 
@@ -47,6 +48,21 @@ SetFile --help           # verify
 
 > `SetFile` is not available on Linux. `python/set_finder_dates.py` will exit with an error if it is missing.
 
+### ffmpeg  *(required for `python/fix_videos.py --fix-vp9` only)*
+
+Needed only if you want to re-encode VP9 videos to H.264.
+
+```bash
+# macOS
+brew install ffmpeg
+
+# Linux (Debian/Ubuntu)
+sudo apt install ffmpeg
+
+# Verify
+ffmpeg -version
+```
+
 ---
 
 ## Supported file types
@@ -60,6 +76,10 @@ Both scripts handle the following extensions (case-insensitive):
 | Videos | `.mp4` `.mov` `.m4v` `.mkv` `.3gp` `.avi` `.mp` |
 
 > **Note on AVI files:** exiftool cannot write metadata inside RIFF AVI containers. `python/recover_metadata.py` will set the Finder creation date via `SetFile` instead and still delete the sidecar.
+
+> **Note on VP9 MP4 files:** QuickTime and all Apple software lack native VP9 support. These files will play audio but show no video on macOS. Use `python/fix_videos.py --fix-vp9` to re-encode them to H.264.
+
+> **Note on `.MP` files:** Google Motion Photos export their video clip with a `.MP` extension (a valid MP4). Use `python/fix_videos.py --rename-mp` to rename them to `.mp4`.
 
 ---
 
@@ -149,6 +169,57 @@ Exit code `0` = clean run. Exit code `2` = one or more failures or unmatched sid
 
 ---
 
+## Script 3 — `python/fix_videos.py`
+
+### What it does
+
+Two independent operations that can be used separately or together:
+
+**`--rename-mp`** — Renames all `.MP` files to `.mp4`. Google exports Motion Photo video clips with a `.MP` extension even though they are standard MP4 containers. Every `.MP` comes paired with a `.jpg` still image (the actual photo); both files are kept — only the clip is renamed.
+
+**`--fix-vp9`** — Re-encodes VP9-coded MP4 files to H.264 using ffmpeg. VP9 inside MP4 is non-standard and unsupported by QuickTime and all Apple software: the video track is invisible, only audio plays. Re-encoding to H.264 fixes this permanently. The original file is replaced in-place; a temporary file is used during encoding so the original is never lost if the process is interrupted.
+
+### Usage
+
+```
+python3 python/fix_videos.py [ROOT_FOLDER] [--rename-mp] [--fix-vp9] [OPTIONS]
+```
+
+At least one of `--rename-mp` or `--fix-vp9` must be specified.
+
+### Options
+
+| Option | Description |
+|---|---|
+| `ROOT_FOLDER` | Path to the folder to process (default: current directory) |
+| `--rename-mp` | Rename `.MP` Motion Photo clips to `.mp4` |
+| `--fix-vp9` | Re-encode VP9 MP4 files to H.264 (requires ffmpeg) |
+| `--dry-run` | Show what would be done without making any changes |
+| `--verbose` / `-v` | Print each file as it is processed; disables the progress bar |
+| `--crf N` | H.264 quality for `--fix-vp9` (0=lossless … 51=worst, default: 18) |
+| `-h` / `--help` | Show help and exit |
+
+### Examples
+
+```bash
+# Dry run — see what would be done
+python3 python/fix_videos.py /path/to/GoogleFotos --rename-mp --fix-vp9 --dry-run
+
+# Rename .MP clips only
+python3 python/fix_videos.py /path/to/GoogleFotos --rename-mp
+
+# Re-encode VP9 videos only (requires ffmpeg)
+python3 python/fix_videos.py /path/to/GoogleFotos --fix-vp9
+
+# Both operations together
+python3 python/fix_videos.py /path/to/GoogleFotos --rename-mp --fix-vp9
+
+# Use a lower quality (smaller file size) for re-encoding
+python3 python/fix_videos.py /path/to/GoogleFotos --fix-vp9 --crf 23
+```
+
+---
+
 ## Script 2 — `python/set_finder_dates.py`
 
 ### What it does
@@ -211,7 +282,11 @@ python3 /path/to/python/recover_metadata.py "Google Fotos" --dry-run
 # 3. Run the metadata recovery for real
 python3 /path/to/python/recover_metadata.py "Google Fotos" --log recovery.log
 
-# 4. Set Finder creation dates on all media files (macOS only)
+# 4. Fix video files — rename .MP clips and re-encode VP9 (requires ffmpeg for --fix-vp9)
+python3 /path/to/python/fix_videos.py "Google Fotos" --rename-mp --fix-vp9 --dry-run
+python3 /path/to/python/fix_videos.py "Google Fotos" --rename-mp --fix-vp9
+
+# 5. Set Finder creation dates on all media files (macOS only)
 python3 /path/to/python/set_finder_dates.py "Google Fotos"
 ```
 

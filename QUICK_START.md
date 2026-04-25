@@ -30,6 +30,14 @@ sudo apt install libimage-exiftool-perl
 xcode-select --install
 ```
 
+**ffmpeg** *(required for `python/fix_videos.py --fix-vp9` only)*
+```bash
+# macOS
+brew install ffmpeg
+# Linux
+sudo apt install ffmpeg
+```
+
 ---
 
 ## 3. Recover metadata into your files
@@ -52,10 +60,32 @@ python3 python/recover_metadata.py /path/to/GoogleFotos
 
 ---
 
-## 4. Set Finder creation dates *(macOS only)*
+## 4. Fix video files
+
+Renames `.MP` Motion Photo clips to `.mp4`, and re-encodes VP9 MP4s to H.264 so they play correctly on macOS.
+
+```bash
+# Dry run first
+python3 python/fix_videos.py /path/to/GoogleFotos --rename-mp --fix-vp9 --dry-run
+
+# Run for real
+python3 python/fix_videos.py /path/to/GoogleFotos --rename-mp --fix-vp9
+```
+
+| Option | Effect |
+|---|---|
+| `--rename-mp` | Rename `.MP` clips to `.mp4` |
+| `--fix-vp9` | Re-encode VP9 MP4s to H.264 (requires ffmpeg) |
+| `--dry-run` | Preview only, no changes made |
+| `--verbose` / `-v` | Print each file as it is processed |
+| `--crf N` | H.264 quality (0=lossless … 51=worst, default: 18) |
+
+---
+
+## 5. Set Finder creation dates *(macOS only)*
 
 Makes Finder show the original capture date instead of today.  
-Run this **after** step 3.
+Run this **after** steps 3 and 4.
 
 ```bash
 python3 python/set_finder_dates.py /path/to/GoogleFotos
